@@ -51,9 +51,11 @@ async def upload_file(
         import io
         data = io.BytesIO(file_content)
         
-        # Unique object name
+        # Unique object name (Safe UUID)
         import uuid
-        object_name = f"{uuid.uuid4()}-{file.filename}"
+        import os
+        file_ext = os.path.splitext(file.filename)[1]
+        object_name = f"{uuid.uuid4()}{file_ext}"
         
         # Upload to MinIO
         minio_handler.upload_file(
@@ -94,11 +96,43 @@ async def download_file(
     if not response:
         raise HTTPException(status_code=500, detail="File missing in storage")
         
+    # Safe filename encoding (RFC 5987)
+    import urllib.parse
+    encoded_filename = urllib.parse.quote(file_item.filename)
+    
     return StreamingResponse(
         response,
         media_type=file_item.content_type,
-        headers={"Content-Disposition": f"{disposition}; filename={file_item.filename}"}
+        headers={
+            "Content-Disposition": f"{disposition}; filename*=utf-8''{encoded_filename}"
+        }
     )
+
+@app.get("/files/{file_id}/zip-contents")
+async def get_zip_contents(
+    file_id: UUID,
+    session: AsyncSession = Depends(get_session)
+):
+    file_item = await session.get(FileMetadata, file_id)
+    if not file_item:
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    response = minio_handler.get_file(file_item.minio_object_name)
+    if not response:
+        raise HTTPException(status_code=500, detail="File missing in storage")
+    
+    try:
+        import zipfile
+        import io
+        
+        # Read file into memory (careful with large files, but acceptable for this scope)
+        file_bytes = response.read()
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+            return {"files": z.namelist()}
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid zip file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/files/{file_id}/metadata", response_model=FileMetadata)
 async def get_file_metadata(

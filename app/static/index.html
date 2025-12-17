@@ -512,6 +512,53 @@
                 font-size: 2rem;
             }
         }
+
+        /* Code Preview */
+        .code-preview-container {
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background: #1e1e1e;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .code-preview {
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            margin: 0;
+            text-align: left;
+        }
+
+        /* Zip Preview */
+        .zip-preview-list {
+            list-style: none;
+            padding: 20px;
+            margin: 0;
+            color: var(--text-main);
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            background: #fff;
+        }
+
+        .zip-preview-list li {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+        }
+
+        .zip-preview-list li:last-child {
+            border-bottom: none;
+        }
+
+        .zip-preview-list i {
+            margin-right: 10px;
+            color: var(--primary);
+        }
     </style>
 </head>
 
@@ -634,6 +681,13 @@
             if (audioExts.includes(ext)) return 'audio';
             if (pdfExts.includes(ext)) return 'pdf';
 
+            // Code / Text extensions
+            const codeExts = ['txt', 'md', 'py', 'java', 'js', 'html', 'css', 'json', 'xml', 'yml', 'yaml', 'c', 'cpp', 'h', 'sh', 'sql', 'rs', 'go', 'ts'];
+            if (codeExts.includes(ext)) return 'code';
+
+            if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'zip';
+            if (['exe', 'msi', 'bat', 'cmd'].includes(ext)) return 'exe';
+
             return 'other';
         }
 
@@ -643,7 +697,11 @@
                 case 'image': return 'fa-file-image';
                 case 'video': return 'fa-file-video';
                 case 'audio': return 'fa-file-audio';
+                case 'audio': return 'fa-file-audio';
                 case 'pdf': return 'fa-file-pdf';
+                case 'code': return 'fa-file-code';
+                case 'zip': return 'fa-file-archive';
+                case 'exe': return 'fa-cogs';
                 default: return 'fa-file-alt';
             }
         }
@@ -747,23 +805,67 @@
             const determinedType = getFileType(file);
 
             // Build Preview
-            let content = '';
+            const setContent = (html) => {
+                preview.innerHTML = html;
+            };
+
             if (determinedType === 'image') {
-                content = `<img src="${url}" alt="Aperçu">`;
+                setContent(`<img src="${url}" alt="Aperçu">`);
             } else if (determinedType === 'video') {
-                content = `<video src="${url}" controls autoplay></video>`;
+                setContent(`<video src="${url}" controls autoplay></video>`);
             } else if (determinedType === 'audio') {
-                content = `<audio src="${url}" controls autoplay style="width: 80%"></audio>`;
+                setContent(`<audio src="${url}" controls autoplay style="width: 80%"></audio>`);
             } else if (determinedType === 'pdf') {
-                content = `<iframe src="${url}" title="PDF Preview"></iframe>`;
+                setContent(`<iframe src="${url}" title="PDF Preview"></iframe>`);
+            } else if (determinedType === 'code') {
+                // Fetch text content
+                fetch(url)
+                    .then(r => r.text())
+                    .then(text => {
+                        // Escape HTML to prevent injection
+                        const safeText = text.replace(/&/g, "&amp;")
+                            .replace(/</g, "&lt;")
+                            .replace(/>/g, "&gt;")
+                            .replace(/"/g, "&quot;")
+                            .replace(/'/g, "&#039;");
+                        setContent(`
+                            <div class="code-preview-container">
+                                <pre class="code-preview"><code>${safeText}</code></pre>
+                            </div>
+                        `);
+                    })
+                    .catch(e => {
+                        setContent(`<div style="color:white; text-align:center;">Erreur de chargement du code</div>`);
+                    });
+            } else if (determinedType === 'zip') {
+                setContent(`<div style="color:white; text-align:center;">Chargement de l'archive...</div>`);
+                fetch(`${API_URL}/files/${file.id}/zip-contents`)
+                    .then(r => {
+                        if (!r.ok) throw new Error("Erreur serveur");
+                        return r.json();
+                    })
+                    .then(data => {
+                        const listHtml = data.files.map(f => `
+                            <li><i class="fas fa-file"></i> ${f}</li>
+                        `).join('');
+                        setContent(`
+                            <ul class="zip-preview-list">
+                                ${listHtml || '<li style="color:gray">L\'archive est vide</li>'}
+                            </ul>
+                        `);
+                        // Hack: Change background to white for zip list
+                        document.getElementById('modalPreview').style.background = '#f9fafb';
+                    })
+                    .catch(e => {
+                        setContent(`<div style="color:white; text-align:center;">Impossible de lire l'archive (ou format non supporté)</div>`);
+                    });
             } else {
-                content = `<div style="text-align:center; color: #ccc;">
+                setContent(`<div style="text-align:center; color: #ccc;">
                     <i class="fas fa-file-invoice" style="font-size: 5rem; margin-bottom: 20px; opacity: 0.5;"></i><br>
                     <span style="font-size: 1.2rem;">Aperçu non disponible</span><br>
                     <span style="font-size: 0.9rem; color: #888;">Ce type de fichier ne peut pas être affiché directement.</span>
-                </div>`;
+                </div>`);
             }
-            preview.innerHTML = content;
 
             // Build Metadata
             const meta = document.getElementById('modalMeta');
