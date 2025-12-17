@@ -3,13 +3,12 @@
 This project is a REST API for uploading and managing files. It uses:
 - **FastAPI** for the backend logic.
 - **MinIO** for storing the actual files (S3 compatible).
-- **PostgreSQL** for storing file details (name, size, SHA-256 hash).
+- **PostgreSQL** for storing file details.
 
 ## Features
 - Upload and Download files.
 - Prevents duplicate uploads using SHA-256 hashing.
-- View files in the browser.
-- Simple web interface included.
+- **Direct Preview**: View files like Images and PDFs directly in the browser without downloading.
 
 ## How to Run
 
@@ -31,7 +30,22 @@ This project is a REST API for uploading and managing files. It uses:
    docker-compose up --build
    ```
 
-## Important Details
+## Technical Details
+
+### Database Storage
+We store the following metadata for each file in PostgreSQL:
+- **Filename**: Original name of the file.
+- **Size**: Size in bytes.
+- **Content Type**: MIME type (e.g., `image/png`).
+- **Hash**: SHA-256 checksum (to find duplicates).
+- **MinIO Object Name**: The ID used to retrieve the file from storage.
+
+### File Previews
+The system supports **streaming responses**, allowing you to view these file types directly in the browser:
+- Images (PNG, JPEG, GIF, etc.)
+- PDF Documents
+- Text Files
+- Any other browser-supported media
 
 ### Services & Ports
 - **Web API**: `http://localhost:8000` (Main access point)
