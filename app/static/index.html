@@ -788,9 +788,8 @@
         function triggerDownload(e, fileId) {
             e.stopPropagation(); // Stop card click
             e.preventDefault(); // Stop any other default
-            const url = `${API_URL}/files/${fileId}?disposition=attachment`;
+            const url = `${API_URL}/files/${fileId}/download`;
             window.location.href = url;
-            // Or create a temporary link to force download if needed, but location.href usually works for attachments
         }
 
         window.openPreview = function (fileId) {
@@ -894,7 +893,7 @@
             `;
 
             // Setup Download Link
-            document.getElementById('modalDownload').href = url + "?disposition=attachment";
+            document.getElementById('modalDownload').href = url + "/download";
 
             document.getElementById('previewModal').style.display = 'flex';
         };

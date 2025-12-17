@@ -10,6 +10,7 @@ from app.storage import minio_handler
 import hashlib
 from typing import List
 from uuid import UUID
+import urllib.parse
 
 app = FastAPI(title="MinIO Microservice API")
 
@@ -23,8 +24,12 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-@app.get("/")
-async def read_root():
+@app.get("/", summary="Access Web Interface")
+async def serve_interface():
+    """
+    Serves the static HTML interface (index.html).
+    From here, the interface uses other endpoints to fetch files by ID.
+    """
     return RedirectResponse(url="/static/index.html")
 
 @app.on_event("startup")
@@ -82,22 +87,36 @@ async def upload_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/files/{file_id}", response_class=StreamingResponse)
-async def download_file(
+@app.get("/files/{file_id}", summary="View File")
+async def view_file(
     file_id: UUID,
-    disposition: str = "inline",
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Retrieve file content for viewing (inline).
+    """
+    return await _serve_file(file_id, session, "inline")
+
+@app.get("/files/{file_id}/download", summary="Download File")
+async def download_file(
+    file_id: UUID,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Trigger a file download (attachment).
+    """
+    return await _serve_file(file_id, session, "attachment")
+
+async def _serve_file(file_id: UUID, session: AsyncSession, disposition: str) -> StreamingResponse:
     file_item = await session.get(FileMetadata, file_id)
     if not file_item:
         raise HTTPException(status_code=404, detail="File not found")
-        
+    
     response = minio_handler.get_file(file_item.minio_object_name)
     if not response:
         raise HTTPException(status_code=500, detail="File missing in storage")
         
     # Safe filename encoding (RFC 5987)
-    import urllib.parse
     encoded_filename = urllib.parse.quote(file_item.filename)
     
     return StreamingResponse(
