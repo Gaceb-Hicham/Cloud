@@ -61,6 +61,22 @@ async def upload_file(
         import os
         file_ext = os.path.splitext(file.filename)[1]
         object_name = f"{uuid.uuid4()}{file_ext}"
+
+        # Handle filename conflicts
+        base_name = os.path.splitext(file.filename)[0]
+        original_filename = file.filename
+        counter = 1
+        
+        while True:
+            # Check if filename exists
+            statement = select(FileMetadata).where(FileMetadata.filename == original_filename)
+            existing_files = await session.exec(statement)
+            if not existing_files.first():
+                break
+            
+            # Generate new filename with suffix
+            original_filename = f"{base_name} ({counter}){file_ext}"
+            counter += 1
         
         # Upload to MinIO
         minio_handler.upload_file(
@@ -72,7 +88,7 @@ async def upload_file(
         
         # Save Metadata
         new_file = FileMetadata(
-            filename=file.filename,
+            filename=original_filename,
             size=file_size,
             content_type=file.content_type,
             hash=file_hash,
